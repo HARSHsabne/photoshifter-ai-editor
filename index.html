@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI PhotoShifter MVP</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif;
+            /* Subtle blue/slate gradient background for a modern look */
+            background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+        }
+        /* Custom style for the drag-and-drop area */
+        #drop-zone {
+            border: 2px dashed #93c5fd; /* Light Blue 300 */
+            background-color: #eff6ff; /* Blue 50 */
+            transition: all 0.2s;
+        }
+        #drop-zone.drag-over {
+            background-color: #bfdbfe; /* Blue 200 */
+            border-color: #3b82f6; /* Blue 500 */
+        }
+        /* Custom style for elevated cards */
+        .app-card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl equivalent */
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .app-card:hover {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08); /* Stronger shadow on hover */
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="text-center mb-12">
+            <h1 class="text-5xl font-extrabold text-blue-700 tracking-tighter">PhotoShifter AI Editor</h1>
+            <p id="user-info" class="text-sm text-gray-600 mt-2">Status: Initializing...</p>
+        </header>
+
+        <main class="space-y-8">
+
+            <!-- Usage and Messaging Area -->
+            <div id="message-container" class="p-4 rounded-xl bg-blue-100 text-blue-800 hidden app-card" role="alert">
+                <p id="status-message" class="font-medium"></p>
+            </div>
+            
+            <div class="bg-white p-5 rounded-2xl border border-gray-100 app-card">
+                <p id="usage-message" class="text-xl font-bold text-gray-700">Daily Generations Remaining: Loading...</p>
+            </div>
+
+            <!-- Image Input & Output Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+                <!-- Original Image / Upload Area -->
+                <div class="bg-white p-6 rounded-2xl border border-gray-100 app-card">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">1. Upload Image</h2>
+                    <div id="drop-zone" class="p-8 text-center rounded-xl cursor-pointer flex flex-col items-center justify-center h-64 lg:h-96" onclick="document.getElementById('file-input').click()">
+                        <svg class="w-12 h-12 text-blue-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        <p class="text-gray-600 font-semibold">Drag & drop or click to upload</p>
+                        <p class="text-xs text-gray-400 mt-1">(PNG or JPG, max 2MB for smooth editing)</p>
+                    </div>
+                    <input type="file" id="file-input" accept="image/png, image/jpeg" class="hidden">
+                    <div id="original-image-container" class="mt-4 hidden h-64 lg:h-96 overflow-hidden flex items-center justify-center">
+                        <img id="original-image" src="" alt="Original Image" class="max-h-full max-w-full object-contain rounded-xl shadow-md">
+                    </div>
+                </div>
+
+                <!-- Generated Image Output -->
+                <div class="bg-white p-6 rounded-2xl border border-gray-100 app-card">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">2. Edited Image</h2>
+                    <div id="generated-image-container" class="bg-gray-100 rounded-xl h-64 lg:h-96 flex items-center justify-center text-gray-400 text-center p-4 shadow-inner">
+                        <p>Your edited image will appear here after generation.</p>
+                    </div>
+                    <button id="download-button" class="mt-6 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition disabled:opacity-50 disabled:cursor-not-allowed hidden" disabled>
+                        Download Image
+                    </button>
+                </div>
+            </div>
+
+            <!-- Prompt & Controls Area -->
+            <div class="bg-white p-6 rounded-2xl border border-gray-100 app-card space-y-5">
+                <h2 class="text-xl font-semibold text-gray-700">3. Describe Your Edit</h2>
+                <textarea id="prompt-input" rows="3" placeholder="e.g., 'Change the sky to a stunning sunset' or 'Remove the background and replace it with a white studio backdrop'" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 transition"></textarea>
+
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <button id="refine-prompt-button" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span id="refine-text">Gen Prompt with AI</span>
+                    </button>
+                    <button id="generate-image-button" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <span id="generate-text">Generate Image (0/5 Free)</span>
+                    </button>
+                </div>
+
+                <div id="refined-prompt-output" class="p-4 bg-gray-50 border border-gray-200 rounded-xl text-base text-gray-600 hidden">
+                    <p class="font-bold text-gray-700 mb-1">Refined Prompt:</p>
+                    <p id="refined-prompt-text"></p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        // --- Global Constants and Firebase Setup ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, setLogLevel, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const apiKey = ""; // The API key is handled by the platform for the fetch call
+
+        // AI Model Constants
+        const LLM_MODEL = 'gemini-2.5-flash-preview-05-20';
+        const IMAGE_MODEL = 'gemini-2.5-flash-image-preview';
+        const BASE_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+        const MAX_GENERATIONS = 5;
+
+        // Firebase instances
+        let app, db, auth;
+        let userId = 'anonymous'; // Default until auth is resolved
+
+        // UI Elements
+        const fileInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-zone');
+        const originalImageContainer = document.getElementById('original-image-container');
+        const originalImage = document.getElementById('original-image');
+        const generatedImageContainer = document.getElementById('generated-image-container');
+        const promptInput = document.getElementById('prompt-input');
+        const refinePromptButton = document.getElementById('refine-prompt-button');
+        const generateImageButton = document.getElementById('generate-image-button');
+        const downloadButton = document.getElementById('download-button');
+        const userInfo = document.getElementById('user-info');
+        const usageMessage = document.getElementById('usage-message');
+        const statusMessage = document.getElementById('status-message');
+        const messageContainer = document.getElementById('message-container');
+        const refinedPromptOutput = document.getElementById('refined-prompt-output');
+        const refinedPromptText = document.getElementById('refined-prompt-text');
+
+        // State Variables
+        let uploadedImageBase64 = null;
+        let uploadedImageMimeType = null; // New state to hold MIME type
+        let currentRefinedPrompt = null;
+        let currentGenerations = 0;
+        let isAuthReady = false;
+
+        // --- Utility Functions ---
+
+        /**
+         * Shows a message in the status banner.
+         * @param {string} message The message content.
+         * @param {string} type 'success', 'error', or 'info'.
+         */
+        function showMessage(message, type = 'info') {
+            let bgColor, textColor;
+            switch (type) {
+                case 'success':
+                    bgColor = 'bg-green-100';
+                    textColor = 'text-green-800';
+                    break;
+                case 'error':
+                    bgColor = 'bg-red-100';
+                    textColor = 'text-red-800';
+                    break;
+                case 'info':
+                default:
+                    bgColor = 'bg-blue-100';
+                    textColor = 'text-blue-800';
+                    break;
+            }
+
+            messageContainer.className = `p-4 rounded-xl ${bgColor} ${textColor} app-card`;
+            statusMessage.textContent = message;
+            messageContainer.classList.remove('hidden');
+        }
+
+        /**
+         * Hides the status banner.
+         */
+        function hideMessage() {
+            messageContainer.classList.add('hidden');
+        }
+
+        /**
+         * Converts a File object to a Base64 string.
+         * @param {File} file The file to convert.
+         * @returns {Promise<string>} The Base64 data string (excluding the MIME header).
+         */
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    // Extract the Base64 data part (remove "data:image/png;base64,")
+                    const base64String = reader.result.split(',')[1];
+                    resolve(base64String);
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        /**
+         * Performs an API fetch call with exponential backoff.
+         */
+        async function fetchWithBackoff(url, options, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        // Check for common rate limit or bad request errors
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(`API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+                    }
+                    return response;
+                } catch (error) {
+                    if (i === retries - 1) {
+                        throw error;
+                    }
+                    const delay = Math.pow(2, i) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // --- Firestore Usage Tracking ---
+
+        /**
+         * Gets the Firestore document reference for the user's daily usage.
+         * @returns {object} The DocumentReference object.
+         */
+        function getUsageDocRef() {
+            if (!db || !userId) return null;
+            // Private data path: /artifacts/{appId}/users/{userId}/limits/daily
+            // The document is 'daily' within the 'limits' collection.
+            const userLimitsCollection = collection(db, 'artifacts', appId, 'users', userId, 'limits');
+            return doc(userLimitsCollection, 'daily');
+        }
+
+        /**
+         * Fetches and checks the user's current daily generation count.
+         */
+        async function getUsage() {
+            if (!isAuthReady) return;
+
+            const docRef = getUsageDocRef();
+            if (!docRef) {
+                usageMessage.textContent = 'Usage: Auth not ready.';
+                return;
+            }
+
+            try {
+                const docSnap = await getDoc(docRef);
+                const now = Date.now();
+                const oneDay = 24 * 60 * 60 * 1000;
+                let usage = { count: 0, timestamp: now };
+
+                if (docSnap.exists()) {
+                    usage = docSnap.data();
+
+                    // Check if 24 hours have passed since the last generation
+                    if (now - usage.timestamp > oneDay) {
+                        usage.count = 0;
+                        await setDoc(docRef, usage); // Reset count in DB
+                    }
+                } else {
+                    // Create initial usage record
+                    await setDoc(docRef, usage);
+                }
+
+                currentGenerations = usage.count;
+                updateUsageUI();
+                checkStateAndEnableButtons();
+
+            } catch (e) {
+                console.error("Error getting usage:", e);
+                showMessage("Failed to load daily usage limits. Functionality may be limited.", 'error');
+                updateUsageUI();
+            }
+        }
+
+        /**
+         * Increments the generation count and saves it to Firestore.
+         */
+        async function incrementUsage() {
+            if (currentGenerations >= MAX_GENERATIONS) return;
+
+            const docRef = getUsageDocRef();
+            if (!docRef) return;
+
+            currentGenerations += 1;
+            updateUsageUI(); // Update UI immediately
+
+            try {
+                await setDoc(docRef, {
+                    count: currentGenerations,
+                    timestamp: Date.now()
+                });
+            } catch (e) {
+                console.error("Error saving usage increment:", e);
+                showMessage("Error saving usage data. Generation might be lost.", 'error');
+            }
+        }
+
+        /**
+         * Updates the UI to reflect the current usage count.
+         */
+        function updateUsageUI() {
+            const remaining = MAX_GENERATIONS - currentGenerations;
+            usageMessage.textContent = `Daily Generations Remaining: ${remaining}/${MAX_GENERATIONS}`;
+            generateImageButton.querySelector('#generate-text').textContent = `Generate Image (${remaining}/${MAX_GENERATIONS} Free)`;
+        }
+
+        /**
+         * Checks the current state (upload, usage) and enables/disables the image generation button.
+         */
+        function checkStateAndEnableButtons() {
+            const isReady = uploadedImageBase64 !== null && currentGenerations < MAX_GENERATIONS;
+            generateImageButton.disabled = !isReady;
+            refinePromptButton.disabled = uploadedImageBase64 === null;
+
+            if (currentGenerations >= MAX_GENERATIONS) {
+                generateImageButton.disabled = true;
+                showMessage("Daily limit reached. Come back tomorrow for more free generations!", 'error');
+            } else if (uploadedImageBase64 === null) {
+                showMessage("Please upload an image to begin editing.", 'info');
+            } else if (!currentRefinedPrompt) {
+                 showMessage("Image uploaded. Enter a prompt and refine it, or generate the image directly.", 'info');
+            }
+        }
+
+        // --- AI API Call Functions ---
+
+        /**
+         * Calls the LLM to refine the user's short prompt.
+         */
+        async function handleRefinePrompt() {
+            hideMessage();
+            if (!promptInput.value.trim()) {
+                showMessage("Please enter a description for the AI to refine.", 'error');
+                return;
+            }
+
+            refinePromptButton.disabled = true;
+            refinePromptButton.querySelector('#refine-text').textContent = 'Refining...';
+
+            const userText = promptInput.value.trim();
+            const systemPrompt = `You are an expert AI prompt engineer. Take the user's simple instruction for an image edit and expand it into a detailed, high-quality, cinematic, photorealistic prompt ready for an image generation model. Do not include your own commentary or role-play, just provide the final, complete prompt text. The prompt must describe an edit or transformation on an existing image.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userText }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+            };
+
+            const url = `${BASE_API_URL}${LLM_MODEL}:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetchWithBackoff(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const generatedText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (generatedText) {
+                    currentRefinedPrompt = generatedText;
+                    refinedPromptText.textContent = generatedText;
+                    refinedPromptOutput.classList.remove('hidden');
+                    showMessage("Prompt refined successfully! You can now generate the image.", 'success');
+                } else {
+                    showMessage("Prompt refinement failed. Try a different input or check console for details.", 'error');
+                }
+            } catch (e) {
+                console.error("Refine Prompt Error:", e);
+                showMessage(`Refine Prompt failed: ${e.message.slice(0, 100)}...`, 'error');
+            } finally {
+                refinePromptButton.disabled = false;
+                refinePromptButton.querySelector('#refine-text').textContent = 'Gen Prompt with AI';
+            }
+        }
+
+        /**
+         * Calls the Image-to-Image model for editing.
+         */
+        async function handleGenerateImage() {
+            hideMessage();
+            if (currentGenerations >= MAX_GENERATIONS) {
+                showMessage("Daily limit reached. Please upgrade or wait for tomorrow.", 'error');
+                return;
+            }
+            // Check if both the base64 data and the mime type are available
+            if (!uploadedImageBase64 || !uploadedImageMimeType) {
+                showMessage("Please upload an image first and ensure it was processed successfully.", 'error');
+                return;
+            }
+            if (!promptInput.value.trim()) {
+                showMessage("Please enter an edit description.", 'error');
+                return;
+            }
+
+            // Use the refined prompt if available, otherwise use the raw prompt
+            const finalPrompt = currentRefinedPrompt || promptInput.value.trim();
+
+            generateImageButton.disabled = true;
+            downloadButton.classList.add('hidden');
+            generatedImageContainer.innerHTML = '<p class="text-gray-600">Generating image... This may take a moment.</p>';
+
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: finalPrompt },
+                        {
+                            inlineData: {
+                                mimeType: uploadedImageMimeType, // FIX: Use the stored MIME type
+                                data: uploadedImageBase64
+                            }
+                        }
+                    ]
+                }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE']
+                },
+            };
+
+            const url = `${BASE_API_URL}${IMAGE_MODEL}:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetchWithBackoff(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+                if (base64Data) {
+                    await incrementUsage(); // Only increment on success
+                    const imageUrl = `data:image/png;base64,${base64Data}`;
+                    generatedImageContainer.innerHTML = `<img id="generated-image" src="${imageUrl}" alt="Generated Image" class="max-h-full max-w-full object-contain rounded-xl shadow-xl">`;
+                    downloadButton.classList.remove('hidden');
+                    downloadButton.onclick = () => downloadImage(imageUrl);
+                    showMessage("Image generated successfully!", 'success');
+                } else {
+                    // Check if the model provided an error message in the text part
+                    const errorText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "No image data received.";
+                    generatedImageContainer.innerHTML = `<p class="text-red-500">Generation failed. ${errorText.slice(0, 100)}</p>`;
+                    showMessage("Image generation failed. Check console for details.", 'error');
+                }
+            } catch (e) {
+                console.error("Generate Image Error:", e);
+                generatedImageContainer.innerHTML = `<p class="text-red-500">Generation failed. API error: ${e.message.slice(0, 100)}...</p>`;
+                showMessage(`Image generation failed: ${e.message.slice(0, 100)}...`, 'error');
+            } finally {
+                generateImageButton.disabled = false;
+                checkStateAndEnableButtons();
+            }
+        }
+
+        /**
+         * Downloads the generated image.
+         * @param {string} dataUrl The Base64 image data URL.
+         */
+        function downloadImage(dataUrl) {
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = 'ai_edited_image.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // --- Event Handlers ---
+
+        /**
+         * Handles the file selection from input or drag/drop.
+         * @param {File} file The uploaded file.
+         */
+        async function handleFile(file) {
+            hideMessage();
+            if (!file || !file.type.startsWith('image/')) {
+                showMessage('Please upload a valid image file (PNG/JPG).', 'error');
+                return;
+            }
+
+            // Simple size check (e.g., 2MB limit, since we convert to Base64 which adds size)
+            if (file.size > 2 * 1024 * 1024) {
+                 showMessage('File size exceeds 2MB limit for free tier. Please upload a smaller image.', 'error');
+                 return;
+            }
+
+            // Display original image
+            const objectURL = URL.createObjectURL(file);
+            originalImage.src = objectURL;
+            dropZone.classList.add('hidden');
+            originalImageContainer.classList.remove('hidden');
+
+            try {
+                uploadedImageBase64 = await fileToBase64(file);
+                uploadedImageMimeType = file.type; // Store MIME type
+                showMessage(`Image "${file.name}" uploaded successfully.`, 'success');
+                // Reset refined prompt on new image upload
+                currentRefinedPrompt = null;
+                refinedPromptOutput.classList.add('hidden');
+            } catch (e) {
+                console.error("File to Base64 Error:", e);
+                showMessage("Could not read image file.", 'error');
+                uploadedImageBase64 = null;
+                uploadedImageMimeType = null;
+            } finally {
+                checkStateAndEnableButtons();
+            }
+        }
+
+        // --- Initializer Function ---
+
+        async function init() {
+            setLogLevel('Debug');
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // Sign in with custom token if available, otherwise sign in anonymously
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userInfo.textContent = `User ID: ${userId.substring(0, 8)}... (Authenticated)`;
+                        isAuthReady = true;
+                        await getUsage();
+                    } else {
+                        // This should ideally not happen if signInAnonymously succeeds, but handles external logouts
+                        userInfo.textContent = 'Status: User not signed in.';
+                        isAuthReady = false;
+                        usageMessage.textContent = 'Usage: Sign-in required.';
+                    }
+                });
+
+            } catch (e) {
+                console.error("Firebase Initialization/Auth Error:", e);
+                userInfo.textContent = 'Status: Auth Failed. Check console.';
+                isAuthReady = true; // Set true to prevent infinite loading, but functionality is broken
+            }
+
+            // Set up event listeners after initialization
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-over');
+            });
+
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-over');
+                if (e.dataTransfer.files.length > 0) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            refinePromptButton.addEventListener('click', handleRefinePrompt);
+            generateImageButton.addEventListener('click', handleGenerateImage);
+
+            checkStateAndEnableButtons();
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
